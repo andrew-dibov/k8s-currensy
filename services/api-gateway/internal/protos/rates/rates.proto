@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package rates;
+
+option go_package = "internal/protos/rates;rates";
+
+service RatesService {
+    rpc GetRates (GetRatesRequest) returns (GetRatesResponse);
+    rpc GetRate (GetRateRequest) returns (GetRateResponse);
+}
+
+message GetRatesRequest {
+    string base_currency = 1;
+}
+
+message GetRatesResponse {
+    map<string, double> rates = 1;
+    string base_currency = 2;
+    int64 timestamp = 3;
+}
+
+message GetRateRequest {
+    string from_currency = 1;
+    string to_currency = 2;
+}
+
+message GetRateResponse {
+    string from_currency = 1;
+    string to_currency = 2;
+    double rate = 3;
+    int64 timestamp = 4;
+}
