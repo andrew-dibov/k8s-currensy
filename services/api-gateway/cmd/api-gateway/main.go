@@ -1,12 +1,8 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -14,71 +10,45 @@ import (
 	"api-gateway/internal/middlewares"
 )
 
-// ---
-
-type ProxyClient struct {
-	client *http.Client
-}
-
-func NewProxyClient(t time.Duration) *ProxyClient {
-	return &ProxyClient{
-		client: &http.Client{
-			Timeout: t,
-		},
-	}
-}
-
-func (p *ProxyClient) ForwardRequest(method string, url string, body any, headers http.Header) (*http.Response, error) {
-	var reader io.Reader
-
-	if body != nil {
-		json, err := json.Marshal(body)
-		if err != nil {
-			return nil, err
-		}
-		reader = bytes.NewReader(json)
-	}
-
-	req, err := http.NewRequest(method, url, reader)
-	if err != nil {
-		return nil, err
-	}
-
-	for key, values := range headers {
-		for _, value := range values {
-			req.Header.Add(key, value)
-		}
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	return p.client.Do(req)
-}
-
-// ---
-
 func main() {
-	l := logrus.New()
-	r := mux.NewRouter()
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.JSONFormatter{})
 
-	l.SetFormatter(&logrus.JSONFormatter{})
+	router := mux.NewRouter()
 
-	r.Use(func(h http.Handler) http.Handler {
-		return middlewares.LoggerMiddleware(h, l)
+	/*
+		Middleware : логирование запросов
+			1. Use(mwf) : метод маршрутизатора : добавить мидлвар в цепь
+			2. func(next) : анонимная функция : принять следующий в цепи обработчик
+			3. LoggerMiddleware(next, logger) : передать обработчик + логгер в мидлвар
+	*/
+
+	router.Use(func(next http.Handler) http.Handler {
+		return middlewares.LoggerMiddleware(next, logger)
 	})
 
-	r.Use(func(h http.Handler) http.Handler {
-		return middlewares.AuthenticatorMiddleware(h, l)
+	/*
+		Middleware : аутентификация запросов
+			1. Use(mwf) : метод маршрутизатора : добавить мидлвар в цепь
+			2. func(next) : анонимная функция : принять следующий в цепи обработчик
+			3. AuthenticatorMiddleware(next, logger) : передать обработчик + логгер в мидлвар
+	*/
+
+	router.Use(func(next http.Handler) http.Handler {
+		return middlewares.AuthenticatorMiddleware(next, logger)
 	})
 
-	r.HandleFunc("/", appHandler)
-	r.HandleFunc("/healthz", healthzHandler)
+	/* HandleFunc(path, func) : обработка запросов : путь -> функция */
 
-	r.HandleFunc("/api/v1/rates", ratesHandler)
-	r.HandleFunc("/api/v1/convert", convertHandler)
-	r.HandleFunc("/api/v1/history", historyHandler)
+	router.HandleFunc("/", appHandler)
+	router.HandleFunc("/health", healthHandler)
+	router.HandleFunc("/api/v1/rates", ratesHandler)
+	router.HandleFunc("/api/v1/convert", convertHandler)
+	router.HandleFunc("/api/v1/history", historyHandler)
 
-	l.Info("Server up")
-	http.ListenAndServe(":8080", r)
+	/* ListenAndServe(port, router) : запуск сервера : порт -> маршрутизатор */
+
+	http.ListenAndServe(":8080", router)
 }
 
 func appHandler(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +56,7 @@ func appHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "API Gateway v1.0.0")
 }
 
-func healthzHandler(w http.ResponseWriter, r *http.Request) {
+func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	fmt.Fprintf(w, "API Gateway is up")

@@ -6,16 +6,45 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func AuthenticatorMiddleware(h http.Handler, l *logrus.Logger) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/healthz" {
-			h.ServeHTTP(w, r)
+/*
+	Middleware : аутентификация запросов
+		1. LoggerMiddleware(next, logger) : принять следующий обработчик + логгер
+		2. Вернуть обработчик : логгирование запросов
+*/
+
+func AuthenticatorMiddleware(next http.Handler, logger *logrus.Logger) http.Handler {
+
+	/*
+		HTTP : новый обработчик
+			1. http.HandlerFunc(func) : создать обработчик из функции
+			2. http.ResponseWriter : интерфейс отправки ответа клиенту
+			3. http.Request : структура для хранения информации об HTTP запросе
+	*/
+
+	return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+
+		/*
+			Получил запрос
+				1. Пропуск проверки для /health : вызов следующего в цепи обработчика
+				2. Get("X-API-Key") : поиск ключа в заголовке
+				3. Get("api_key") : поиск ключа в параметре
+				4. Структура данных : пары "ключ-значение" : !!! ИСПОЛЬЗОВАТЬ СТОРОННИЙ СЕРВИС !!!
+				5. Проверка на отсутствие ключа
+				6. Проверка существования ключа в map :
+					- Если да : пропустить запрос
+					- Если нет : залогировать неверный ключ и вернуть ошибку
+				7. ServeHTTP(res, req) : вызов следующего в цепи обработчика
+			Отправил ответ
+		*/
+
+		if req.URL.Path == "/health" {
+			next.ServeHTTP(res, req)
 			return
 		}
 
-		apiKey := r.Header.Get("X-API-Key")
+		apiKey := req.Header.Get("X-API-Key")
 		if apiKey == "" {
-			apiKey = r.URL.Query().Get("api_key")
+			apiKey = req.URL.Query().Get("api_key")
 		}
 
 		validKeys := map[string]bool{
@@ -25,17 +54,17 @@ func AuthenticatorMiddleware(h http.Handler, l *logrus.Logger) http.Handler {
 		}
 
 		if apiKey == "" {
-			l.Warn("Absent API key")
-			http.Error(w, "Provide API key or go fuck yourself", http.StatusUnauthorized)
+			logger.Warn("Absent API key")
+			http.Error(res, "Provide API key or go fuck yourself", http.StatusUnauthorized)
 			return
 		}
 
 		if !validKeys[apiKey] {
-			l.WithField("key", apiKey).Warn("Wrong API key")
-			http.Error(w, "Wrong API key", http.StatusUnauthorized)
+			logger.WithField("key", apiKey).Warn("Wrong API key")
+			http.Error(res, "Wrong API key", http.StatusUnauthorized)
 			return
 		}
 
-		h.ServeHTTP(w, r)
+		next.ServeHTTP(res, req)
 	})
 }

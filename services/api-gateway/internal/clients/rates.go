@@ -1,7 +1,6 @@
 package clients
 
 import (
-	rates "api-gateway/internal/protos/rates"
 	"context"
 	"fmt"
 	"time"
@@ -9,24 +8,60 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+
+	proto "api-gateway/internal/protos/rates"
 )
 
+/*
+	RatesClient : структура
+		- gRPC : клиент : генерируется proto
+		- conn : управление соединением : библиотека gRPC
+*/
+
 type RatesClient struct {
-	client rates.RatesServiceClient
-	conn   *grpc.ClientConn
+	gRPC proto.RatesServiceClient
+	conn *grpc.ClientConn
 }
 
-func NewRatesClient(serviceURL string) (*RatesClient, error) {
+/* NewRatesClient(url) : создание gRPC */
+
+func NewRatesClient(url string) (*RatesClient, error) {
 
 	/*
-		Канал :
-			1. Создание канала
-			2. Передача конфигурационных файлов
+		Создание канала :
+			- WithDefaultCallOptions : свойства вызовов
+				- 10МБ лимит на получение
+				- 10МБ лимит на отправку
+			- WithTransportCredentials : шифрование вызовов
+			- WithDefaultServiceConfig : конфигурация
 	*/
 
-	conn, err := grpc.NewClient(serviceURL,
+	conn, err := grpc.NewClient(url,
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*10), grpc.MaxCallSendMsgSize(1024*1024*10)),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+
+		/*
+			- loadBalancingPolicy :
+				- DNS вернет несколько адресов подов
+				- RoundRobin распределит запросы между ними
+			- methodConfig : конфигурация по методу
+				- name : название метода
+				- retryPolicy : повторные запросы метода :
+					- maxAttempts : до 3 попыток
+					- initialBackoff : начальная задержка
+					- maxBackoff : максимальная задержка
+					- backoffMultiplier : прирост задержки
+					- retryableStatusCodes : статусы для ретраев
+
+			Попытка 1 : UNAVAILABLE
+				ждем 0.1s
+			Попытка 2 : неудача
+				ждем 0.2s : initialBackoff * 2
+			Попытка 3 : неудача
+				ждем 0.4s : 0.2s * 2
+			Попытка 4 : СТОП : maxAttempts = 3
+		*/
+
 		grpc.WithDefaultServiceConfig(`{
 			"loadBalancingPolicy": "round_robin",
       "methodConfig": [{
@@ -42,20 +77,22 @@ func NewRatesClient(serviceURL string) (*RatesClient, error) {
 		}`),
 	)
 
+	/* Проверка создания канала */
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create gRPC client : %w", err)
+		return nil, fmt.Errorf("Failed to create channel : %w", err)
 	}
+
+	/*
+		Context : механизм управления временем жизни операций
+			- WithTimeout(ctx, timeout) : новый контекст с таймаутом
+			- defer cancel() : закрыть контекст перед завершением функции
+	*/
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	/*
-		Железо :
-			1. Процессор формирует сетевые пакеты
-			2. Операционная система выделяет порты и буферы для сокета
-			3. Сетевая карта отправляет и принимает пакеты
-
-		Подключение :
+		Connect : подключение
 			1. DNS запрос
 			2. TCP рукопожатие : SYN, SYN-ACK, ACK
 			3. TLS/SSL рукопожатие : этот шаг пропускается при insecure.NewCredentials()
@@ -64,56 +101,61 @@ func NewRatesClient(serviceURL string) (*RatesClient, error) {
 
 	conn.Connect()
 
+	/* Проверка состояния канала */
 	if err := waitForReady(ctx, conn); err != nil {
 		conn.Close()
-		return nil, fmt.Errorf("Failed to wait for connection : %w", err)
+		return nil, fmt.Errorf("Failed to wait for ready : %w", err)
 	}
 
+	/* Инициализация и возврат структуры */
 	return &RatesClient{
-		client: rates.NewRatesServiceClient(conn),
-		conn:   conn,
-	}, nil
+		gRPC: proto.NewRatesServiceClient(conn),
+		conn: conn,
+	}, nil // Если ошибка : nil
 }
 
 func waitForReady(ctx context.Context, conn *grpc.ClientConn) error {
 
 	/*
-		Мониторим состояние канала :
-			1. Создаем бесконечный цикл
-			2. Запрашиваем состояние
-			3. Обрабатываем состояние
+		Отслеживать состояние :
+			1. Бесконечный цикл
+			2. Запрос состояние
+			3. Обработка состояния
 	*/
 
 	for {
 		state := conn.GetState()
 
 		/* Соединение установлено : выход без ошибки */
-
 		if state == connectivity.Ready {
-			return nil // Соединение установлено : выходим без ошибки
+			return nil
 		}
 
 		/* Канал закрылся : выход с ошибкой */
-
 		if state == connectivity.Shutdown {
 			return fmt.Errorf("Connection shutdown")
 		}
 
-		/* Горутина блокируется и висит : ждем сигнал ОС или таймаута */
-
+		/* Блокировка : ожидание изменения состояния подключения */
 		if !conn.WaitForStateChange(ctx, state) {
 
-			/* Состояние изменилось : сигнал ОС или таймаут пришел */
-
+			/* Состояние изменилось : таймаут или контекст отменен */
 			if ctx.Err() != nil {
-				return fmt.Errorf("Timeout waiting for connection : %w", ctx.Err())
+				return fmt.Errorf("Connection timeout : %w", ctx.Err())
 			}
 		}
 
-		/*
-			1. Если сигнал от ОС : смена состояния
-			2. Если не ready : соединение не установлено
-			3. Проверка состояний : новый цикл
-		*/
+		/* Если дошли сюда : состояние изменилось : проверяем повторно */
 	}
+}
+
+/* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!11 */
+
+func (client *RatesClient) GetRates(ctx context.Context, baseCurrency string) (*proto.GetRatesResponse, error) {
+	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	return client.gRPC.GetRates(callCtx, &proto.GetRatesRequest{
+		BaseCurrency: baseCurrency,
+	})
 }
