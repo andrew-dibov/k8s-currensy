@@ -1,48 +1,33 @@
 package handlers
 
 import (
-	"encoding/json"
+	"api-gateway/internal/clients"
 	"net/http"
 
 	"github.com/sirupsen/logrus"
-
-	"api-gateway/internal/clients"
 )
 
 type RatesHandler struct {
-	ratesClient *clients.RatesClient
-	logger      *logrus.Logger
+	client *clients.RatesClient
+	logger *logrus.Logger
 }
 
-func NewRatesHandler(ratesClient *clients.RatesClient, l *logrus.Logger) *RatesHandler {
+func NewRatesHandler(client *clients.RatesClient, logger *logrus.Logger) *RatesHandler {
 	return &RatesHandler{
-		ratesClient: ratesClient,
-		logger:      l,
+		client: client,
+		logger: logger,
 	}
 }
 
-func (h *RatesHandler) GetRates(w http.ResponseWriter, r *http.Request) {
-	baseCurrency := r.URL.Query().Get("base")
-	if baseCurrency == "" {
-		baseCurrency = "USD"
+func (handler *RatesHandler) GetRates(res http.ResponseController, req *http.Request) {
+	base := req.URL.Query().Get("base")
+
+	if base == "" {
+		base = "USD"
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"base_currency": baseCurrency,
-		"path":          r.URL.Path,
-	}).Debug("Processing rates")
-
-	res, err := h.ratesClient.GetRates(r.Context(), baseCurrency)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to get rates")
-		http.Error(w, "Failed to fetch currency rates", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	if err := json.NewEncoder(w).Encode(res); err != nil {
-		h.logger.WithError(err).Error("Failed to encode response to JSON")
-	}
+	handler.logger.WithFields(logrus.Fields{
+		"req_path":  req.URL.Path,
+		"base_curr": base,
+	}).Debug("getting rates")
 }
