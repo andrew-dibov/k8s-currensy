@@ -14,16 +14,11 @@ type Config struct {
 }
 
 func Load() *Config {
-	envPort := os.Getenv("PORT")
-	if envPort == "" {
-		envPort = "8080"
-	}
-
-	envApiKeys := os.Getenv("API_KEYS")
+	apiKeysString := os.Getenv("API_KEYS")
 	apiKeys := make(map[string]bool)
 
-	if envApiKeys != "" {
-		for _, key := range strings.Split(envApiKeys, ",") {
+	if apiKeysString != "" {
+		for _, key := range strings.Split(apiKeysString, ",") {
 			apiKeys[strings.TrimSpace(key)] = true
 		}
 	} else {
@@ -33,26 +28,18 @@ func Load() *Config {
 		}
 	}
 
-	envCurrencyService := os.Getenv("CURRENCY_SERVICE")
-	if envCurrencyService == "" {
-		envCurrencyService = "localhost:50051"
-	}
-
-	envConversionService := os.Getenv("CONVERSION_SERVICE")
-	if envConversionService == "" {
-		envConversionService = "localhost:50051"
-	}
-
-	envHistoryService := os.Getenv("HISTORY_SERVICE")
-	if envHistoryService == "" {
-		envHistoryService = "localhost:50051"
-	}
-
 	return &Config{
-		Port:              ":" + envPort,
 		APIKeys:           apiKeys,
-		CurrencyService:   envCurrencyService,
-		ConversionService: envConversionService,
-		HistoryService:    envHistoryService,
+		Port:              ":" + getEnv("PORT", "8080"),
+		CurrencyService:   getEnv("CURRENCY_SERVICE", "localhost:50051"),
+		ConversionService: getEnv("CONVERSION_SERVICE", "localhost:50051"),
+		HistoryService:    getEnv("HISTORY_SERVICE", "localhost:50051"),
 	}
+}
+
+func getEnv(key, def string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return def
 }

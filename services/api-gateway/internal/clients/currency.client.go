@@ -16,15 +16,13 @@ type CurrencyClient struct {
 	conn *grpc.ClientConn
 }
 
-/* --- --- --- */
-
 func NewCurrencyClient(url string) (*CurrencyClient, error) {
 	conn, err := grpc.NewClient(url,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{
 		"loadBalancingPolicy": "round_robin",
     "methodConfig": [{
-      "name": [{"service": "rates.RatesService"}],
+      "name": [{"service": "currency.CurrencyService"}],
       "retryPolicy": {
         "maxAttempts": 3,
         "initialBackoff": "0.1s",

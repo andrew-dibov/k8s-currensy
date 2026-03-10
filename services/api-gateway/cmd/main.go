@@ -25,16 +25,16 @@ func main() {
 	}
 	defer currencyClient.Close()
 
-	conversionClient, err := clients.NewConversionClient(cfg.ConversionService)
-	if err != nil {
-		log.WithError(err).Fatal("failed to init conversion client")
-	}
-	defer conversionClient.Close()
+	// conversionClient, err := clients.NewConversionClient(cfg.ConversionService)
+	// if err != nil {
+	// 	log.WithError(err).Fatal("failed to init conversion client")
+	// }
+	// defer conversionClient.Close()
 
 	/* --- --- --- */
 
 	currency := handlers.NewCurrencyHandler(currencyClient, log)
-	conversion := handlers.NewConversionHandler(conversionClient, log)
+	// conversion := handlers.NewConversionHandler(conversionClient, log)
 
 	/* --- --- --- */
 
@@ -54,8 +54,8 @@ func main() {
 	router.HandleFunc("/health", healthHandler)
 
 	router.HandleFunc("/api/v1/rate", currency.GetRate).Methods("GET")
-	router.HandleFunc("/api/v1/all_rates", currency.GetAllRates).Methods("GET")
-	router.HandleFunc("/api/v1/convert", conversion.Convert).Methods("POST")
+	router.HandleFunc("/api/v1/rates", currency.GetAllRates).Methods("GET")
+	// router.HandleFunc("/api/v1/convert", conversion.Convert).Methods("POST")
 
 	/* --- --- --- */
 

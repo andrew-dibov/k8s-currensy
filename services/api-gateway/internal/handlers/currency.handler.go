@@ -38,10 +38,10 @@ type GetRateResponse struct {
 }
 
 func (h *CurrencyHandler) GetRate(w http.ResponseWriter, r *http.Request) {
-	from := r.URL.Query().Get("from_currency")
-	to := r.URL.Query().Get("to_currency")
+	fromCurrency := r.URL.Query().Get("from_currency")
+	toCurrency := r.URL.Query().Get("to_currency")
 
-	if from == "" || to == "" {
+	if fromCurrency == "" || toCurrency == "" {
 		http.Error(w, "missing params", http.StatusBadRequest)
 
 		return
@@ -49,7 +49,7 @@ func (h *CurrencyHandler) GetRate(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	data, err := h.client.GetRate(ctx, from, to)
+	data, err := h.client.GetRate(ctx, fromCurrency, toCurrency)
 	if err != nil {
 		h.logger.WithError(err).Error("failed to get rate")
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -74,6 +74,7 @@ type GetAllRatesResponse struct {
 
 func (h *CurrencyHandler) GetAllRates(w http.ResponseWriter, r *http.Request) {
 	baseCurrency := r.URL.Query().Get("base_currency")
+
 	if baseCurrency == "" {
 		baseCurrency = "USD"
 	}
@@ -82,7 +83,7 @@ func (h *CurrencyHandler) GetAllRates(w http.ResponseWriter, r *http.Request) {
 
 	data, err := h.client.GetAllRates(ctx, baseCurrency)
 	if err != nil {
-		h.logger.WithError(err).Error("failed to get rates")
+		h.logger.WithError(err).Error("failed to get all rates")
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 
 		return

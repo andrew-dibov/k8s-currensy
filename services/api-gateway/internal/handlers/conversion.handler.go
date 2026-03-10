@@ -47,6 +47,7 @@ type ConvertResponse struct {
 
 func (h *ConversionHandler) Convert(w http.ResponseWriter, r *http.Request) {
 	var body ConvertRequest
+
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid body", http.StatusBadRequest)
 		return

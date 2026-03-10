@@ -22,7 +22,7 @@ func NewConversionClient(url string) (*ConversionClient, error) {
 		grpc.WithDefaultServiceConfig(`{
 		"loadBalancingPolicy": "round_robin",
     "methodConfig": [{
-      "name": [{"service": "rates.RatesService"}],
+      "name": [{"service": "conversion.ConversionService"}],
       "retryPolicy": {
         "maxAttempts": 3,
         "initialBackoff": "0.1s",
