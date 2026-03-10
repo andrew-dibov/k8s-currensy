@@ -6,20 +6,17 @@ import (
 )
 
 type Config struct {
-	Port            string
-	RatesServiceURL string
-	APIKeys         map[string]bool
+	Port              string
+	APIKeys           map[string]bool
+	CurrencyService   string
+	ConversionService string
+	HistoryService    string
 }
 
 func Load() *Config {
 	envPort := os.Getenv("PORT")
 	if envPort == "" {
 		envPort = "8080"
-	}
-
-	envRatesService := os.Getenv("RATES_SERVICE")
-	if envRatesService == "" {
-		envRatesService = "localhost:50051"
 	}
 
 	envApiKeys := os.Getenv("API_KEYS")
@@ -33,14 +30,29 @@ func Load() *Config {
 		apiKeys = map[string]bool{
 			"test-1111": true,
 			"test-2222": true,
-			"test-3333": true,
-			"test-4444": true,
 		}
 	}
 
+	envCurrencyService := os.Getenv("CURRENCY_SERVICE")
+	if envCurrencyService == "" {
+		envCurrencyService = "localhost:50051"
+	}
+
+	envConversionService := os.Getenv("CONVERSION_SERVICE")
+	if envConversionService == "" {
+		envConversionService = "localhost:50051"
+	}
+
+	envHistoryService := os.Getenv("HISTORY_SERVICE")
+	if envHistoryService == "" {
+		envHistoryService = "localhost:50051"
+	}
+
 	return &Config{
-		Port:            ":" + envPort,
-		RatesServiceURL: envRatesService,
-		APIKeys:         apiKeys,
+		Port:              ":" + envPort,
+		APIKeys:           apiKeys,
+		CurrencyService:   envCurrencyService,
+		ConversionService: envConversionService,
+		HistoryService:    envHistoryService,
 	}
 }

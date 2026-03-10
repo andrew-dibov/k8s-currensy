@@ -19,13 +19,22 @@ func main() {
 
 	/* --- --- --- */
 
-	ratesClient, err := clients.NewRatesClient(cfg.RatesServiceURL)
+	currencyClient, err := clients.NewCurrencyClient(cfg.CurrencyService)
 	if err != nil {
-		log.WithError(err).Fatal("failed to init rates client")
+		log.WithError(err).Fatal("failed to init currency client")
 	}
-	defer ratesClient.Close()
+	defer currencyClient.Close()
 
-	rates := handlers.NewRatesHandler(ratesClient, log)
+	conversionClient, err := clients.NewConversionClient(cfg.ConversionService)
+	if err != nil {
+		log.WithError(err).Fatal("failed to init conversion client")
+	}
+	defer conversionClient.Close()
+
+	/* --- --- --- */
+
+	currency := handlers.NewCurrencyHandler(currencyClient, log)
+	conversion := handlers.NewConversionHandler(conversionClient, log)
 
 	/* --- --- --- */
 
@@ -41,12 +50,12 @@ func main() {
 
 	/* --- --- --- */
 
-	router.HandleFunc("/", handlers.RootHandler)
-	router.HandleFunc("/health", handlers.HealthHandler)
+	router.HandleFunc("/", rootHandler)
+	router.HandleFunc("/health", healthHandler)
 
-	router.HandleFunc("/api/v1/rate", rates.GetRate).Methods("GET")
-	router.HandleFunc("/api/v1/all_rates", rates.GetAllRates).Methods("GET")
-	router.HandleFunc("/api/v1/convert", rates.Convert).Methods("POST")
+	router.HandleFunc("/api/v1/rate", currency.GetRate).Methods("GET")
+	router.HandleFunc("/api/v1/all_rates", currency.GetAllRates).Methods("GET")
+	router.HandleFunc("/api/v1/convert", conversion.Convert).Methods("POST")
 
 	/* --- --- --- */
 
@@ -54,4 +63,14 @@ func main() {
 	if err := http.ListenAndServe(cfg.Port, router); err != nil {
 		log.WithError(err).Fatal("server failed")
 	}
+}
+
+/* --- --- --- */
+
+func rootHandler(res http.ResponseWriter, req *http.Request) {
+	res.Write([]byte("API-Gateway v1.0.0"))
+}
+
+func healthHandler(res http.ResponseWriter, req *http.Request) {
+	res.Write([]byte("OK"))
 }

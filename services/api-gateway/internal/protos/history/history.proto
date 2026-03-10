@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package history;
+import "google/protobuf/timestamp.proto";
+option go_package = "./;history";
+
+service HistoryService {
+  rpc LogConversion(LogConversionRequest) returns (LogConversionResponse);
+  rpc GetHistory(GetHistoryRequest) returns (GetHistoryResponse);
+}
+
+message ConversionRecord {
+  string id = 1;
+  string from_currency = 2;
+  string to_currency = 3;
+  double amount = 4;
+  double result = 5;
+  double rate = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message LogConversionRequest {
+  ConversionRecord record = 1;
+}
+
+message LogConversionResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetHistoryRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string from_currency = 3;
+  string to_currency = 4;
+  google.protobuf.Timestamp start_date = 5;
+  google.protobuf.Timestamp end_date = 6;
+}
+
+message GetHistoryResponse {
+  repeated ConversionRecord records = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 total_pages = 4;
+}

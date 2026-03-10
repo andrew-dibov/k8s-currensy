@@ -1,7 +1,7 @@
 package clients
 
 import (
-	pb "api-gateway/internal/protos/rates"
+	pb "api-gateway/internal/protos/currency"
 	"context"
 	"fmt"
 	"time"
@@ -11,14 +11,14 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type RatesClient struct {
-	pbuf pb.RatesServiceClient
+type CurrencyClient struct {
+	pbuf pb.CurrencyServiceClient
 	conn *grpc.ClientConn
 }
 
 /* --- --- --- */
 
-func NewRatesClient(url string) (*RatesClient, error) {
+func NewCurrencyClient(url string) (*CurrencyClient, error) {
 	conn, err := grpc.NewClient(url,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultServiceConfig(`{
@@ -61,44 +61,33 @@ func NewRatesClient(url string) (*RatesClient, error) {
 		}
 	}
 
-	return &RatesClient{pbuf: pb.NewRatesServiceClient(conn), conn: conn}, nil
+	return &CurrencyClient{pbuf: pb.NewCurrencyServiceClient(conn), conn: conn}, nil
 }
 
-func (client *RatesClient) Close() error {
-	if client.conn != nil {
-		return client.conn.Close()
+func (c *CurrencyClient) Close() error {
+	if c.conn != nil {
+		return c.conn.Close()
 	}
 	return nil
 }
 
 /* --- --- --- */
 
-func (client *RatesClient) GetRate(ctx context.Context, fromCurrency string, toCurrency string) (*pb.GetRateResponse, error) {
+func (c *CurrencyClient) GetRate(ctx context.Context, fromCurrency string, toCurrency string) (*pb.GetRateResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	return client.pbuf.GetRate(ctx, &pb.GetRateRequest{
+	return c.pbuf.GetRate(ctx, &pb.GetRateRequest{
 		FromCurrency: fromCurrency,
 		ToCurrency:   toCurrency,
 	})
 }
 
-func (client *RatesClient) GetAllRates(ctx context.Context, baseCurrency string) (*pb.GetAllRatesResponse, error) {
+func (c *CurrencyClient) GetAllRates(ctx context.Context, baseCurrency string) (*pb.GetAllRatesResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	return client.pbuf.GetAllRates(ctx, &pb.GetAllRatesRequest{
+	return c.pbuf.GetAllRates(ctx, &pb.GetAllRatesRequest{
 		BaseCurrency: baseCurrency,
-	})
-}
-
-func (client *RatesClient) Convert(ctx context.Context, fromCurrency string, toCurrency string, amount float64) (*pb.ConvertResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	return client.pbuf.Convert(ctx, &pb.ConvertRequest{
-		FromCurrency: fromCurrency,
-		ToCurrency:   toCurrency,
-		Amount:       amount,
 	})
 }
