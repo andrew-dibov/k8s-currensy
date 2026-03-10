@@ -1,0 +1,12 @@
+services:
+  api-gateway:
+    container_name: api-gateway
+    build:
+      dockerfile: Dockerfile
+      context: ./api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT="8080"
+      - RATES_SERVICE_URL="rates-service:50051"
+      - API_KEYS="test-1111,test-2222,test-3333,test-4444"

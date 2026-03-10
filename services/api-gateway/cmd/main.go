@@ -3,6 +3,7 @@ package main
 import (
 	"api-gateway/internal/clients"
 	"api-gateway/internal/configs"
+	"api-gateway/internal/handlers"
 	"api-gateway/internal/middlewares"
 	"net/http"
 
@@ -13,43 +14,44 @@ import (
 func main() {
 	cfg := configs.Load()
 
-	logger := logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
+	log := logrus.New()
+	log.SetFormatter(&logrus.JSONFormatter{})
 
-	ratesClient, err := clients.NewRatesClient(cfg.RatesService)
+	/* --- --- --- */
+
+	ratesClient, err := clients.NewRatesClient(cfg.RatesServiceURL)
 	if err != nil {
-		logger.WithError(err).Fatal("failed to create rates client")
+		log.WithError(err).Fatal("failed to init rates client")
 	}
-	// defer ratesClient. // добавить метод close() в клиент
+	defer ratesClient.Close()
 
-	// ratesHandler := handlers.NewRatesHandler(ratesClient, logger)
+	rates := handlers.NewRatesHandler(ratesClient, log)
+
+	/* --- --- --- */
 
 	router := mux.NewRouter()
 
 	router.Use(func(next http.Handler) http.Handler {
-		return middlewares.LoggerMiddleware(next, logger)
+		return middlewares.LoggerMiddleware(next, log)
 	})
 
 	router.Use(func(next http.Handler) http.Handler {
-		return middlewares.AuthenticatorMiddleware(next, logger, cfg.APIKeys)
+		return middlewares.AuthenticatorMiddleware(next, log, cfg.APIKeys)
 	})
 
-	router.HandleFunc("/", func(res http.ResponseWriter, req *http.Request) {
-		res.Write([]byte("API-Gateway v1.0.0"))
-	})
+	/* --- --- --- */
 
-	router.HandleFunc("/health", func(res http.ResponseWriter, req *http.Request) {
-		res.Write([]byte("OK"))
-	})
+	router.HandleFunc("/", handlers.RootHandler)
+	router.HandleFunc("/health", handlers.HealthHandler)
 
-	router.HandleFunc("/api/v1/rates", func(w http.ResponseWriter, r *http.Request) {}).Methods("GET")
-	router.HandleFunc("/api/v1/convert", func(w http.ResponseWriter, r *http.Request) {}).Methods("POST")
-	router.HandleFunc("/api/v1/convert", func(w http.ResponseWriter, r *http.Request) {}).Methods("GET")
+	router.HandleFunc("/api/v1/rate", rates.GetRate).Methods("GET")
+	router.HandleFunc("/api/v1/all_rates", rates.GetAllRates).Methods("GET")
+	router.HandleFunc("/api/v1/convert", rates.Convert).Methods("POST")
+
+	/* --- --- --- */
 
 	http.ListenAndServe(":8080", router)
-
-	logger.Info("starting API gateway on : ", cfg.Port)
 	if err := http.ListenAndServe(cfg.Port, router); err != nil {
-		logger.WithError(err).Fatal("server failed")
+		log.WithError(err).Fatal("server failed")
 	}
 }

@@ -3,6 +3,7 @@ syntax = "proto3";
 package rates;
 option go_package = "./;rates";
 
+
 service RatesService {
   rpc GetRate(GetRateRequest) returns (GetRateResponse);
   rpc GetAllRates(GetAllRatesRequest) returns (GetAllRatesResponse);

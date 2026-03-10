@@ -6,9 +6,9 @@ import (
 )
 
 type Config struct {
-	Port         string
-	RatesService string
-	APIKeys      map[string]bool
+	Port            string
+	RatesServiceURL string
+	APIKeys         map[string]bool
 }
 
 func Load() *Config {
@@ -39,8 +39,8 @@ func Load() *Config {
 	}
 
 	return &Config{
-		Port:         ":" + envPort,
-		RatesService: envRatesService,
-		APIKeys:      apiKeys,
+		Port:            ":" + envPort,
+		RatesServiceURL: envRatesService,
+		APIKeys:         apiKeys,
 	}
 }
