@@ -54,7 +54,7 @@ func main() {
 	router.HandleFunc("/health", healthHandler)
 
 	router.HandleFunc("/api/v1/rate", currency.GetRate).Methods("GET")
-	router.HandleFunc("/api/v1/rates", currency.GetAllRates).Methods("GET")
+	router.HandleFunc("/api/v1/allRates", currency.GetAllRates).Methods("GET")
 	// router.HandleFunc("/api/v1/convert", conversion.Convert).Methods("POST")
 
 	/* --- --- --- */

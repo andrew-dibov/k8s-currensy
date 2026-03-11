@@ -7,32 +7,35 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - PORT="8080"
-      - API_KEYS="test-1111,test-2222"
-      - CURRENCY_SERVICE="currency-service:50051"
-      - CONVERSION_SERVICE="conversion-service:50051"
-      - HISTORY_SERVICE="history-service:50051"
+      PORT: "8080"
+      API_KEYS: "test-1111,test-2222"
+      HISTORY_SERVICE: "history:50051"
+      CURRENCY_SERVICE: "currency:50051"
+      CONVERSION_SERVICE: "conversion:50051"
   currency:
     container_name: currency
     build:
       dockerfile: Dockerfile
       context: ./currency
     ports:
-      - "8080:8080"
+      - "50051:50051"
     environment:
-      - TEST="some"
+      PORT: "50051"
+      POSTGRES: "postgres://currency:pass1234@postgres:5432/currency?sslmode=disable"
+      EXTERNAL_API_URL: "https://v6.exchangerate-api.com/v6/"
+    env_file:
+      - ./.env
   postgres:
     image: postgres:15
-    container_name: my_postgres
+    container_name: postgres
     environment:
-      POSTGRES_USER: currency
-      POSTGRES_PASSWORD: password1234
-      POSTGRES_DB: currency
+      POSTGRES_DB: "currency"
+      POSTGRES_USER: "currency"
+      POSTGRES_PASSWORD: "pass1234"
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
 
 volumes:
   postgres_data:

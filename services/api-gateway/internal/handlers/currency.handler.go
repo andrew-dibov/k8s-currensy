@@ -38,8 +38,8 @@ type GetRateResponse struct {
 }
 
 func (h *CurrencyHandler) GetRate(w http.ResponseWriter, r *http.Request) {
-	fromCurrency := r.URL.Query().Get("from_currency")
-	toCurrency := r.URL.Query().Get("to_currency")
+	fromCurrency := r.URL.Query().Get("fromCurrency")
+	toCurrency := r.URL.Query().Get("toCurrency")
 
 	if fromCurrency == "" || toCurrency == "" {
 		http.Error(w, "missing params", http.StatusBadRequest)
