@@ -1,4 +1,4 @@
-package fetchers
+package clients
 
 import (
 	"encoding/json"
@@ -7,12 +7,12 @@ import (
 	"time"
 )
 
-type ExchangeRateFetcher struct {
+type ExchangeClient struct {
 	url    string
 	client *http.Client
 }
 
-type ExchangeRateResponse struct {
+type ExchangeRes struct {
 	Result             string             `json:"result"`
 	Documentation      string             `json:"documentation"`
 	TermsOfUse         string             `json:"terms_of_use"`
@@ -24,8 +24,8 @@ type ExchangeRateResponse struct {
 	ConversionRates    map[string]float64 `json:"conversion_rates"`
 }
 
-func NewExchangeRateFetcher(url string, token string) *ExchangeRateFetcher {
-	return &ExchangeRateFetcher{
+func NewExchangeClient(url string, token string) *ExchangeClient {
+	return &ExchangeClient{
 		url: fmt.Sprintf("%s%s/latest/", url, token),
 		client: &http.Client{
 			Timeout: 10 * time.Second,
@@ -33,24 +33,24 @@ func NewExchangeRateFetcher(url string, token string) *ExchangeRateFetcher {
 	}
 }
 
-func (f *ExchangeRateFetcher) FetchRates(baseCurrency string) (map[string]float64, error) {
-	reqURL := fmt.Sprintf("%s%s", f.url, baseCurrency)
+func (ec *ExchangeClient) GetRates(baseCurrency string) (map[string]float64, error) {
+	url := fmt.Sprintf("%s%s", ec.url, baseCurrency)
 
 	if baseCurrency == "" {
-		return nil, fmt.Errorf("base currency is empty")
+		return nil, fmt.Errorf("empty base currency")
 	}
 
-	res, err := f.client.Get(reqURL)
+	res, err := ec.client.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch rates : %v", err)
+		return nil, fmt.Errorf("failed to get rates : %v", err)
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned : %s", res.Status)
+		return nil, fmt.Errorf("API responded with : %s", res.Status)
 	}
 
-	var data ExchangeRateResponse
+	var data ExchangeRes
 	if err := json.NewDecoder(res.Body).Decode(&data); err != nil {
 		return nil, fmt.Errorf("failed to decode response : %v", err)
 	}

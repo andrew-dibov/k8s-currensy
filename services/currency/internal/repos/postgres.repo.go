@@ -1,4 +1,4 @@
-package repositories
+package repos
 
 import (
 	"context"
@@ -16,12 +16,12 @@ func NewPostgres(db *sql.DB) *Postgres {
 	}
 }
 
-func (r *Postgres) GetRate(ctx context.Context, fromCurrency string, toCurrency string) (float64, error) {
+func (p *Postgres) GetRate(ctx context.Context, fromCurrency string, toCurrency string) (float64, error) {
 	if fromCurrency == toCurrency {
 		return 1.00, nil
 	}
 
-	querySQL := `
+	query := `
 	SELECT rate FROM rates WHERE currency_code = $1 
 	AND base_currency = 'USD' AND updated_at > NOW() - INTERVAL '1 day'
   `
@@ -31,7 +31,7 @@ func (r *Postgres) GetRate(ctx context.Context, fromCurrency string, toCurrency 
 	var rate float64
 
 	if fromCurrency == "USD" {
-		err := r.db.QueryRowContext(ctx, querySQL, toCurrency).Scan(&rate)
+		err := p.db.QueryRowContext(ctx, query, toCurrency).Scan(&rate)
 		if err != nil {
 			return 0, err
 		}
@@ -39,10 +39,8 @@ func (r *Postgres) GetRate(ctx context.Context, fromCurrency string, toCurrency 
 		return rate, nil
 	}
 
-	/* --- --- --- */
-
 	if toCurrency == "USD" {
-		err := r.db.QueryRowContext(ctx, querySQL, fromCurrency).Scan(&rate)
+		err := p.db.QueryRowContext(ctx, query, fromCurrency).Scan(&rate)
 		if err != nil {
 			return 0, err
 		}
@@ -54,12 +52,12 @@ func (r *Postgres) GetRate(ctx context.Context, fromCurrency string, toCurrency 
 
 	var fromRate, toRate float64
 
-	err := r.db.QueryRowContext(ctx, querySQL, fromCurrency).Scan(&fromRate)
+	err := p.db.QueryRowContext(ctx, query, fromCurrency).Scan(&fromRate)
 	if err != nil {
 		return 0, err
 	}
 
-	err = r.db.QueryRowContext(ctx, querySQL, toCurrency).Scan(&toRate)
+	err = p.db.QueryRowContext(ctx, query, toCurrency).Scan(&toRate)
 	if err != nil {
 		return 0, err
 	}
@@ -67,59 +65,65 @@ func (r *Postgres) GetRate(ctx context.Context, fromCurrency string, toCurrency 
 	return toRate / fromRate, nil
 }
 
-func (r *Postgres) GetAllRates(ctx context.Context, baseCurrency string) (map[string]float64, error) {
-	querySQL := `
+func (p *Postgres) GetAllRates(ctx context.Context, baseCurrency string) (map[string]float64, error) {
+	query := `
 	SELECT currency_code, rate FROM rates WHERE base_currency = $1
   AND updated_at > NOW() - INTERVAL '1 day'
 	`
 
-	rows, err := r.db.QueryContext(ctx, querySQL, baseCurrency)
+	rows, err := p.db.QueryContext(ctx, query, baseCurrency)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
+	/* --- --- --- */
+
 	rates := make(map[string]float64)
 
 	for rows.Next() {
-		var currencyCode string
+		var code string
 		var rate float64
 
-		if err := rows.Scan(&currencyCode, &rate); err != nil {
+		if err := rows.Scan(&code, &rate); err != nil {
 			return nil, err
 		}
 
-		rates[currencyCode] = rate
+		rates[code] = rate
 	}
 
 	return rates, nil
 }
 
-func (r *Postgres) UpdateRates(ctx context.Context, baseCurrency string, rates map[string]float64) error {
+func (p *Postgres) UpdateRates(ctx context.Context, baseCurrency string, rates map[string]float64) error {
 	if len(rates) == 0 {
-		return fmt.Errorf("empty rates")
+		return fmt.Errorf("rates map is empty")
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
+	/* --- --- --- */
 
+	tx, err := p.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	querySQL := "DELETE FROM rates WHERE base_currency = $1"
+	/* --- --- --- */
 
-	if _, err := tx.ExecContext(ctx, querySQL, baseCurrency); err != nil {
+	query := "DELETE FROM rates WHERE base_currency = $1"
+	if _, err := tx.ExecContext(ctx, query, baseCurrency); err != nil {
 		return err
 	}
 
-	querySQL = `
+	/* --- --- --- */
+
+	query = `
 	INSERT INTO rates (base_currency, currency_code, rate, updated_at)
   VALUES ($1, $2, $3, NOW())
 	`
 
-	for currencyCode, rate := range rates {
-		if _, err := tx.ExecContext(ctx, querySQL, baseCurrency, currencyCode, rate); err != nil {
+	for code, rate := range rates {
+		if _, err := tx.ExecContext(ctx, query, baseCurrency, code, rate); err != nil {
 			return err
 		}
 	}
