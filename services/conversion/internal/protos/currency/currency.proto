@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package currency;
+option go_package = "./;currency";
+
+
+service CurrencyService {
+  rpc GetRate(GetRateRequest) returns (GetRateResponse);
+  rpc GetAllRates(GetAllRatesRequest) returns (GetAllRatesResponse);
+}
+
+
+message GetRateRequest {
+  string from_currency = 1;
+  string to_currency = 2;
+}
+
+message GetRateResponse {
+  double rate = 1;
+  string from_currency = 2;
+  string to_currency = 3;
+}
+
+
+message GetAllRatesRequest {
+  string base_currency = 1;
+}
+
+message GetAllRatesResponse {
+  string base_currency = 1;
+  map<string, double> rates = 2;
+}

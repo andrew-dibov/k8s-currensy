@@ -1,8 +1,8 @@
 package clients
 
 import (
-	pb "api-gateway/internal/protos/currency"
 	"context"
+	pb "conversion/internal/protos/currency"
 	"fmt"
 	"time"
 
@@ -80,14 +80,5 @@ func (c *CurrencyClient) GetRate(ctx context.Context, fromCurrency string, toCur
 	return c.pbuf.GetRate(ctx, &pb.GetRateRequest{
 		FromCurrency: fromCurrency,
 		ToCurrency:   toCurrency,
-	})
-}
-
-func (c *CurrencyClient) GetAllRates(ctx context.Context, baseCurrency string) (*pb.GetAllRatesResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	return c.pbuf.GetAllRates(ctx, &pb.GetAllRatesRequest{
-		BaseCurrency: baseCurrency,
 	})
 }

@@ -37,6 +37,8 @@ func NewConversionClient(url string) (*ConversionClient, error) {
 		return nil, fmt.Errorf("failed to establish connection : %w", err)
 	}
 
+	conn.Connect()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

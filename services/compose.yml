@@ -1,23 +1,23 @@
 services:
-
   api-gateway:
-    container_name: api-gateway
+    container_name: "api-gateway"
     build:
-      dockerfile: Dockerfile
-      context: ./api-gateway
+      dockerfile: "Dockerfile"
+      context: "./api-gateway"
     ports:
       - "8080:8080"
+    networks:
+      - test-net
+    restart: no
+    depends_on:
+      currency:
+        condition: service_started
     environment:
       PORT: "8080"
       API_KEYS: "test-1111,test-2222"
       HISTORY_SERVICE: "history:50051"
       CURRENCY_SERVICE: "currency:50051"
       CONVERSION_SERVICE: "conversion:50051"
-    depends_on:
-      currency:
-        condition: service_healthy
-    networks:
-      - dev-net
 
   currency:
     container_name: currency
@@ -26,48 +26,74 @@ services:
       context: ./currency
     ports:
       - "50051:50051"
+    networks:
+      - test-net
+    restart: no
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       PORT: "50051"
       API: "https://v6.exchangerate-api.com/v6/"
       POSTGRES_URL: "postgres://currency:pass1234@postgres:5432/currency?sslmode=disable"
     env_file:
       - ./.env
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
-    networks:
-      - dev-net
 
   postgres:
     image: postgres:15
     container_name: postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - test-net
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./currency/migrations:/docker-entrypoint-initdb.d
     environment:
       POSTGRES_DB: "currency"
       POSTGRES_USER: "currency"
       POSTGRES_PASSWORD: "pass1234"
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./currency/migrations:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U currency"]
       interval: 5s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: redis-server --requirepass pass1234
+    ports:
+      - "6379:6379"
     networks:
-      - dev-net
+      - test-net
+    restart: unless-stopped
+
+  conversion:
+    container_name: conversion
+    build:
+      dockerfile: Dockerfile
+      context: ./conversion
+    ports:
+      - "50052:50052"
+    networks:
+      - test-net
+    restart: no
+    depends_on:
+      currency:
+        condition: service_started
+      redis:
+        condition: service_started
+    environment:
+      PORT: "50052"
+      CURRENCY_SERVICE: "currency:50051"
+      REDIS_ADDR: "redis:6379"
+    env_file:
+      - ./.env
 
 networks:
-  dev-net:
+  test-net:
     driver: bridge
 
 volumes:

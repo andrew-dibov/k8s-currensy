@@ -1,0 +1,13 @@
+k8s/
+tmp/
+
+.git
+.gitignore
+
+Dockerfile
+.dockerignore
+
+*.log
+*.md
+
+README.md

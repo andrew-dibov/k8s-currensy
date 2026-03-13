@@ -42,12 +42,12 @@ func main() {
 		log.WithError(err).Fatal("failed to announce listener")
 	}
 
-	currency := servers.NewCurrencyServer(rp)
-	server := grpc.NewServer()
+	srv := grpc.NewServer()
+	srvc := servers.NewCurrencyServer(rp)
 
-	proto.RegisterCurrencyServiceServer(server, currency)
+	proto.RegisterCurrencyServiceServer(srv, srvc)
 
-	if err := server.Serve(lis); err != nil {
+	if err := srv.Serve(lis); err != nil {
 		log.WithError(err).Error("failed to start currency server")
 	}
 }
@@ -57,7 +57,6 @@ func startUpdates(rp *repos.Postgres, ec *clients.ExchangeClient, log *logrus.Lo
 	defer ticker.Stop()
 
 	updateRates(rp, ec, log)
-
 	for range ticker.C {
 		updateRates(rp, ec, log)
 	}
