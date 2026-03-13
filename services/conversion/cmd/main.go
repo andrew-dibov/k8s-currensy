@@ -18,30 +18,33 @@ func main() {
 	log := logrus.New()
 	log.SetFormatter(&logrus.JSONFormatter{})
 
+	/* --- --- --- */
+
 	currencyClient, err := clients.NewCurrencyClient(cfg.CurrencyService)
 	if err != nil {
-		log.WithError(err).Fatal("failed to create currency client")
+		log.WithError(err).Fatal("currency client failed")
 	}
 	defer currencyClient.Close()
 
 	redisClient, err := clients.NewRedisClient(cfg.RedisAddr, cfg.RedisPass, cfg.RedisDB)
 	if err != nil {
-		log.WithError(err).Fatal("failed to create redis client")
+		log.WithError(err).Fatal("redis client failed")
 	}
 	defer redisClient.Close()
+
+	/* --- --- --- */
+
+	lis, err := net.Listen("tcp", cfg.Port)
+	if err != nil {
+		log.WithError(err).Fatal("failed to announce listener")
+	}
 
 	srv := grpc.NewServer()
 	srvc := servers.NewConversionServer(currencyClient, redisClient, log)
 
 	pb.RegisterConversionServiceServer(srv, srvc)
 
-	lis, err := net.Listen("tcp", cfg.Port)
-	if err != nil {
-		log.WithError(err).Fatal("failed to listen")
-	}
-
-	log.WithField("port", cfg.Port).Info("starting conversion service")
 	if err := srv.Serve(lis); err != nil {
-		log.WithError(err).Fatal("server failed")
+		log.WithError(err).Fatal("failed to start conversion")
 	}
 }

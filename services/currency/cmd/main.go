@@ -24,14 +24,14 @@ func main() {
 
 	/* --- --- --- */
 
-	db, err := sql.Open("postgres", cfg.PostgresURL)
+	db, err := sql.Open("postgres", cfg.PostgresDB)
 	if err != nil {
 		log.WithError(err).Fatal("failed to open db")
 	}
 	defer db.Close()
 
 	rp := repos.NewPostgres(db)
-	ec := clients.NewExchangeClient(cfg.API, cfg.APIToken)
+	ec := clients.NewExchangeClient(cfg.ExternalAPI, cfg.APIToken)
 
 	go startUpdates(rp, ec, log)
 
@@ -48,7 +48,7 @@ func main() {
 	proto.RegisterCurrencyServiceServer(srv, srvc)
 
 	if err := srv.Serve(lis); err != nil {
-		log.WithError(err).Error("failed to start currency server")
+		log.WithError(err).Error("failed to start currency")
 	}
 }
 

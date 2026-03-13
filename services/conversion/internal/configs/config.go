@@ -12,11 +12,11 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		Port:            ":" + getEnv("PORT", "50052"),
+		Port:            ":" + getEnv("PORT", ""),
 		RedisDB:         0,
-		RedisPass:       getEnv("REDIS_PASSWORD", ""),
-		RedisAddr:       getEnv("REDIS_ADDR", "redis:6379"),
-		CurrencyService: getEnv("CURRENCY_SERVICE", "currency:50051"),
+		RedisAddr:       getEnv("REDIS_DB", ""),
+		RedisPass:       getEnv("REDIS_PASS", ""),
+		CurrencyService: getEnv("CURRENCY_SERVICE", ""),
 	}
 }
 

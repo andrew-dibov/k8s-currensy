@@ -15,11 +15,11 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		Port:              ":" + getEnv("PORT", "8080"),
-		HistoryService:    getEnv("HISTORY_SERVICE", "localhost:50051"),
-		CurrencyService:   getEnv("CURRENCY_SERVICE", "localhost:50051"),
-		ConversionService: getEnv("CONVERSION_SERVICE", "localhost:50051"),
-		APIKeys:           parseKeys("API_KEYS", map[string]bool{"test-1111": true, "test-2222": true}),
+		Port:              ":" + getEnv("PORT", ""),
+		HistoryService:    getEnv("HISTORY_SERVICE", ""),
+		CurrencyService:   getEnv("CURRENCY_SERVICE", ""),
+		ConversionService: getEnv("CONVERSION_SERVICE", ""),
+		APIKeys:           parseKeys("API_KEYS", map[string]bool{}),
 	}
 }
 

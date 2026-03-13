@@ -33,6 +33,8 @@ func NewExchangeClient(url string, token string) *ExchangeClient {
 	}
 }
 
+/* --- --- --- */
+
 func (ec *ExchangeClient) GetRates(baseCurrency string) (map[string]float64, error) {
 	url := fmt.Sprintf("%s%s", ec.url, baseCurrency)
 

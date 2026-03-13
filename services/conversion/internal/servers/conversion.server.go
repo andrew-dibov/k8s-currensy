@@ -11,18 +11,20 @@ import (
 
 type ConversionServer struct {
 	pb.UnimplementedConversionServiceServer
-	currency *clients.CurrencyClient
-	redis    *clients.RedisClient
-	log      *logrus.Logger
+	redis *clients.RedisClient
+	curr  *clients.CurrencyClient
+	log   *logrus.Logger
 }
 
-func NewConversionServer(currency *clients.CurrencyClient, redis *clients.RedisClient, log *logrus.Logger) *ConversionServer {
+func NewConversionServer(curr *clients.CurrencyClient, redis *clients.RedisClient, log *logrus.Logger) *ConversionServer {
 	return &ConversionServer{
-		currency: currency,
-		redis:    redis,
-		log:      log,
+		redis: redis,
+		curr:  curr,
+		log:   log,
 	}
 }
+
+/* --- --- --- */
 
 func (cs *ConversionServer) Convert(ctx context.Context, req *pb.ConvertRequest) (*pb.ConvertResponse, error) {
 	if req.FromCurrency == "" || req.ToCurrency == "" || req.Amount <= 0 {
@@ -31,7 +33,6 @@ func (cs *ConversionServer) Convert(ctx context.Context, req *pb.ConvertRequest)
 
 	rate, err := cs.getRate(ctx, req.FromCurrency, req.ToCurrency)
 	if err != nil {
-		cs.log.WithError(err).Error("failed to get rate")
 		return nil, fmt.Errorf("conversion failed : %w", err)
 	}
 
@@ -60,15 +61,10 @@ func (cs *ConversionServer) getRate(ctx context.Context, fromCurrency string, to
 	}
 
 	if rate, found, err := cs.redis.GetRate(ctx, fromCurrency, toCurrency); err == nil && found {
-		cs.log.WithField("cache", "hit").Debug("rate from cache")
 		return rate, nil
-	} else if err != nil {
-		cs.log.WithError(err).Warn("failed get from redis")
 	}
 
-	cs.log.WithField("cache", "miss").Debug("getting rate from currency service")
-
-	data, err := cs.currency.GetRate(ctx, fromCurrency, toCurrency)
+	data, err := cs.curr.GetRate(ctx, fromCurrency, toCurrency)
 	if err != nil {
 		return 0, err
 	}

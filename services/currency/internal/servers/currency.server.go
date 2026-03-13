@@ -18,6 +18,8 @@ func NewCurrencyServer(rp *repos.Postgres) *CurrencyServer {
 	}
 }
 
+/* --- --- --- */
+
 func (cs *CurrencyServer) GetRate(ctx context.Context, req *proto.GetRateRequest) (*proto.GetRateResponse, error) {
 	rate, err := cs.rp.GetRate(ctx, req.FromCurrency, req.ToCurrency)
 	if err != nil {

@@ -5,16 +5,16 @@ import "os"
 type Config struct {
 	Port        string
 	APIToken    string
-	API         string
-	PostgresURL string
+	ExternalAPI string
+	PostgresDB  string
 }
 
 func Load() *Config {
 	return &Config{
-		Port:        ":" + getEnv("PORT", "50051"),
-		APIToken:    getEnv("API_TOKEN", ""),
-		API:         getEnv("API", "https://v6.exchangerate-api.com/v6/"),
-		PostgresURL: getEnv("POSTGRES_URL", "postgres://currency:pass1234@postgres:5432/currency?sslmode=disable"),
+		Port:        ":" + getEnv("PORT", ""),
+		PostgresDB:  getEnv("POSTGRES_DB", ""),
+		APIToken:    getEnv("EXTERNAL_API_TOKEN", ""),
+		ExternalAPI: getEnv("EXTERNAL_API", "https://v6.exchangerate-api.com/v6/"),
 	}
 }
 

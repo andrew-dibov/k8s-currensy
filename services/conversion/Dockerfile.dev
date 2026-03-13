@@ -22,5 +22,5 @@ COPY --from=build /app/app .
 RUN adduser -D -g '' app && chown -R app:app /root
 USER app
 
-EXPOSE 50051
+EXPOSE 8082
 CMD ["./app"]
