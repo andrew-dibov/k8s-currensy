@@ -24,6 +24,7 @@ func AuthenticatorMiddleware(next http.Handler, logger *logrus.Logger, validKeys
 		if !validKeys[key] {
 			logger.WithField("api_key", key).Warn("wrong API key")
 			http.Error(res, "Wrong API key", http.StatusUnauthorized)
+			return
 		}
 
 		next.ServeHTTP(res, req)

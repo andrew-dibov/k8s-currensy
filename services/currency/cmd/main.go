@@ -24,7 +24,7 @@ func main() {
 
 	/* --- --- --- */
 
-	db, err := sql.Open("postgres", cfg.PostgresDB)
+	db, err := sql.Open("postgres", cfg.Postgres)
 	if err != nil {
 		log.WithError(err).Fatal("failed to open db")
 	}

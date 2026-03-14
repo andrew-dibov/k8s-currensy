@@ -12,9 +12,9 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		Port:            ":" + getEnv("PORT", ""),
+		Port:            ":" + getEnv("PORT", "8080"),
 		RedisDB:         0,
-		RedisAddr:       getEnv("REDIS_DB", ""),
+		RedisAddr:       getEnv("REDIS_ADDR", ""),
 		RedisPass:       getEnv("REDIS_PASS", ""),
 		CurrencyService: getEnv("CURRENCY_SERVICE", ""),
 	}

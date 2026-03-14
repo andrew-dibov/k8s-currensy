@@ -15,7 +15,7 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		Port:              ":" + getEnv("PORT", ""),
+		Port:              ":" + getEnv("PORT", "8080"),
 		HistoryService:    getEnv("HISTORY_SERVICE", ""),
 		CurrencyService:   getEnv("CURRENCY_SERVICE", ""),
 		ConversionService: getEnv("CONVERSION_SERVICE", ""),

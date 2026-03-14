@@ -1,117 +1,199 @@
 services:
   api-gateway:
-    container_name: "api-gateway"
-    restart: "unless-stopped"
+    container_name: api-gateway
+    restart: unless-stopped
     build:
-      dockerfile: "Dockerfile.dev"
-      context: "./api-gateway"
+      dockerfile: Dockerfile
+      context: ./api-gateway
     depends_on:
       currency:
-        condition: "service_healthy"
+        condition: service_healthy
       conversion:
-        condition: "service_healthy"
+        condition: service_healthy
+      # history:
+      #   condition: service_healthy
     ports:
-      - "8080:8080"
+      - 8080:8080
     networks:
-      - "development-net"
-    environment:
-      PORT: "8080"
-      API_KEYS: "test-1111,test-2222,test-3333,test-4444"
-      CURRENCY_SERVICE: "currency:8081"
-      CONVERSION_SERVICE: "conversion:8082"
-      HISTORY_SERVICE: "history:8083"
+      - gateway-net
+      - backend-net
+    env_file:
+      - ./api-gateway/.compose.env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 5
-  currency:
-    container_name: "currency"
-    restart: "unless-stopped"
-    build:
-      dockerfile: "Dockerfile.dev"
-      context: "./currency"
-    ports:
-      - "8081:8081"
-    networks:
-      - "development-net"
-    depends_on:
-      postgres:
-        condition: "service_healthy"
-    environment:
-      PORT: "8081"
-      EXTERNAL_API: "https://v6.exchangerate-api.com/v6/"
-      POSTGRES_DB: "postgres://currency:pass1234@postgres:5432/currency?sslmode=disable"
-    env_file:
-      - ".env"
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "8081"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-  postgres:
-    image: "postgres:15"
-    container_name: "postgres"
-    restart: "unless-stopped"
-    ports:
-      - "5432:5432"
-    networks:
-      - "development-net"
-    volumes:
-      - "postgres_data:/var/lib/postgresql/data"
-      - "./currency/migrations:/docker-entrypoint-initdb.d"
-    environment:
-      POSTGRES_DB: "currency"
-      POSTGRES_USER: "currency"
-      POSTGRES_PASSWORD: "pass1234"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U currency"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+
   conversion:
-    container_name: "conversion"
-    restart: "unless-stopped"
+    container_name: conversion
+    restart: unless-stopped
     build:
-      dockerfile: "Dockerfile.dev"
-      context: "./conversion"
-    ports:
-      - "8082:8082"
+      dockerfile: Dockerfile
+      context: ./conversion
     networks:
-      - "development-net"
+      - backend-net
+      - infra-net
     depends_on:
       currency:
-        condition: "service_healthy"
+        condition: service_healthy
       redis:
-        condition: "service_healthy"
-    environment:
-      PORT: "8082"
-      CURRENCY_SERVICE: "currency:8081"
-      REDIS_DB: "redis:6379"
-      REDIS_PASS: "pass1234"
+        condition: service_healthy
+    env_file:
+      - ./conversion/.compose.env
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "8082"]
+      test: ["CMD", "nc", "-z", "localhost", "8080"]
       interval: 10s
       timeout: 5s
-      retries: 5  
-  redis:
-    image: "redis:7-alpine"
-    container_name: "redis"
-    restart: "unless-stopped"
-    command: "redis-server --requirepass pass1234"
-    ports:
-      - "6379:6379"
+      retries: 5
+
+  currency:
+    container_name: currency
+    restart: unless-stopped
+    build:
+      dockerfile: Dockerfile
+      context: ./currency
     networks:
-      - "development-net"
+      - backend-net
+      - postgres-net
+    depends_on:
+      postgres-currency:
+        condition: service_healthy
+    env_file:
+      - ./currency/.compose.env
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "pass1234", "ping"]
+      test: ["CMD", "nc", "-z", "localhost", "8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  # history:
+  #   container_name: history
+  #   restart: unless-stopped
+  #   build:
+  #     dockerfile: Dockerfile
+  #     context: ./history
+  #   networks:
+  #     - backend-net
+  #     - postgres-net
+  #     - infra-net
+  #   depends_on:
+  #     postgres-history:
+  #       condition: service_healthy
+  #     kafka:
+  #       condition: service_healthy
+  #   env_file:
+  #     - ./history/.compose.env
+  #   healthcheck:
+  #     test: ["CMD", "nc", "-z", "localhost", "8080"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # ---
+
+  postgres-currency:
+    image: postgres:15
+    container_name: postgres-currency
+    restart: unless-stopped
+    networks:
+      - postgres-net
+    volumes:
+      - postgres_currency:/var/lib/postgresql/data
+      - ./currency/migrations:/docker-entrypoint-initdb.d
+    environment:
+      POSTGRES_DB: currency
+      POSTGRES_USER: currency
+      POSTGRES_PASSWORD: ${POSTGRES_CURRENCY_PASS}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "currency"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-history:
+    image: postgres:15
+    container_name: postgres-history
+    restart: unless-stopped
+    networks:
+      - postgres-net
+    volumes:
+      - postgres_history:/var/lib/postgresql/data
+      - ./history/migrations:/docker-entrypoint-initdb.d
+    environment:
+      POSTGRES_DB: history
+      POSTGRES_USER: history
+      POSTGRES_PASSWORD: ${POSTGRES_HISTORY_PASS}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "history"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASS}
+    networks:
+      - infra-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASS}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    restart: unless-stopped
+    networks:
+      - infra-net
+    environment:
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_CLIENT_PORT: 2181
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    networks:
+      - infra-net
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_BROKER_ID: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
       interval: 10s
       timeout: 5s
       retries: 5
 
 networks:
-  development-net:
-    driver: "bridge"
+  gateway-net:
+    driver: bridge
+  backend-net:
+    driver: bridge
+  postgres-net:
+    driver: bridge
+  infra-net:
+    driver: bridge
 
 volumes:
-  postgres_data:
+  postgres_currency:
+  postgres_history:

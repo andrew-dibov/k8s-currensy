@@ -6,13 +6,13 @@ type Config struct {
 	Port        string
 	APIToken    string
 	ExternalAPI string
-	PostgresDB  string
+	Postgres    string
 }
 
 func Load() *Config {
 	return &Config{
-		Port:        ":" + getEnv("PORT", ""),
-		PostgresDB:  getEnv("POSTGRES_DB", ""),
+		Port:        ":" + getEnv("PORT", "8080"),
+		Postgres:    getEnv("POSTGRES", ""),
 		APIToken:    getEnv("EXTERNAL_API_TOKEN", ""),
 		ExternalAPI: getEnv("EXTERNAL_API", "https://v6.exchangerate-api.com/v6/"),
 	}
