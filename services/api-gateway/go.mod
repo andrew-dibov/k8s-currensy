@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/gorilla/mux v1.8.1
 	github.com/sirupsen/logrus v1.9.4
+	golang.org/x/time v0.15.0
 	google.golang.org/grpc v1.79.2
 	google.golang.org/protobuf v1.36.11
 )

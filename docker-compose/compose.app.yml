@@ -1,0 +1,136 @@
+x-common: &common
+  mem_reservation: 256m
+  mem_limit: 512m
+  cpus: '0.5'
+  restart: unless-stopped
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "5"
+  healthcheck:
+    test: ["CMD", "nc", "-z", "localhost", "8080"]
+    interval: 3s
+    timeout: 3s
+    retries: 3
+    start_period: 3s
+    start_interval: 3s
+
+services:
+  api-gateway:
+    <<: *common
+    build:
+      context: ../services/api-gateway
+      dockerfile: Dockerfile
+      args:
+        GO_VERSION: ${GO_VERSION:-1.25.0}
+    container_name: api-gateway
+    depends_on:
+      conversion:
+        condition: service_healthy
+      currency:
+        condition: service_healthy
+    environment:
+      - APP_PORT=8080
+      - APP_KEYS=test-1111,test-2222,test-3333,test-4444
+      - HISTORY_ADDR=history
+      - HISTORY_PORT=8080
+      - CURRENCY_ADDR=currency
+      - CURRENCY_PORT=8080
+      - CONVERSION_ADDR=conversion
+      - CONVERSION_PORT=8080
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    networks:
+      - app-net
+    labels:
+      - "app.name=api-gateway"
+  
+  conversion:
+    <<: *common
+    build:
+      context: ../services/conversion
+      dockerfile: Dockerfile
+      args:
+        GO_VERSION: ${GO_VERSION:-1.25.0}
+    container_name: conversion
+    depends_on:
+      conversion-redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - app-net
+      - infra-net
+    labels:
+      - "app.name=conversion"
+    environment:
+      - APP_PORT=8080
+      - CURRENCY_ADDR=currency
+      - CURRENCY_PORT=8080
+      - REDIS_ADDR=conversion-redis
+      - REDIS_PORT=6379
+      - REDIS_PASS=pass1234
+      - KAFKA_TOPIC=conversion
+      - KAFKA_BROKERS=kafka:29092
+  
+  currency:
+    <<: *common
+    build:
+      context: ../services/currency
+      dockerfile: Dockerfile
+      args:
+        GO_VERSION: ${GO_VERSION:-1.25.0}
+    container_name: currency
+    depends_on:
+      currency-postgres:
+        condition: service_healthy
+    networks:
+      - app-net
+      - psql-net
+    labels:
+      - "app.name=currency"
+    environment:
+      - APP_PORT=8080
+      - EXTERNAL_URL=https://v6.exchangerate-api.com/v6/
+      - POSTGRES_USER=currency
+      - POSTGRES_PASS=pass1234
+      - POSTGRES_HOST=currency-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=currency
+    env_file:
+      - .env
+
+  history:
+    <<: *common
+    build:
+      context: ../services/history
+      dockerfile: Dockerfile
+      args:
+        GO_VERSION: ${GO_VERSION:-1.25.0}
+    container_name: history
+    depends_on:
+      conversion:
+        condition: service_healthy
+      currency:
+        condition: service_healthy
+      history-postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - app-net
+      - psql-net
+      - infra-net
+    labels:
+      - "app.name=history"
+    environment:
+      - APP_PORT=8080
+      - POSTGRES_USER=history
+      - POSTGRES_PASS=pass1234
+      - POSTGRES_HOST=history-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=history
+      - KAFKA_BROKERS=kafka:29092
+      - KAFKA_GROUP=history-group
+      - KAFKA_TOPIC=conversion

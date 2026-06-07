@@ -4,76 +4,125 @@ import (
 	"context"
 	"currency/internal/clients"
 	"currency/internal/configs"
-	proto "currency/internal/protos/currency"
 	"currency/internal/repos"
 	"currency/internal/servers"
 	"database/sql"
+	"errors"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
+
+	pb "currency/internal/protos/currency"
 
 	_ "github.com/lib/pq"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 )
 
 func main() {
-	cfg := configs.Load()
+	appConfig := configs.LoadAppConfig()
 
-	log := logrus.New()
-	log.SetFormatter(&logrus.JSONFormatter{})
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.JSONFormatter{})
+
+	logger.WithFields(logrus.Fields{
+		"app_port":       appConfig.AppPort,
+		"external_url":   appConfig.ExternalURL,
+		"external_token": appConfig.ExternalToken,
+		"postgres_url":   appConfig.PostgresURL,
+	}).Info("currency : app config loaded")
 
 	/* --- --- --- */
 
-	db, err := sql.Open("postgres", cfg.Postgres)
+	db, err := sql.Open("postgres", appConfig.PostgresURL)
 	if err != nil {
-		log.WithError(err).Fatal("failed to open db")
+		logger.WithError(err).Fatal("failed to open postgres")
 	}
 	defer db.Close()
 
-	rp := repos.NewPostgres(db)
-	ec := clients.NewExchangeClient(cfg.ExternalAPI, cfg.APIToken)
+	/* --- --- --- */
 
-	go startUpdates(rp, ec, log)
+	postgresRepo := repos.NewPostgresRepo(db)
+	exchangeClient := clients.NewExchangeClient(appConfig.ExternalURL, appConfig.ExternalToken)
+
+	go startUpdates(postgresRepo, exchangeClient, logger)
 
 	/* --- --- --- */
 
-	lis, err := net.Listen("tcp", cfg.Port)
+	srv := servers.NewCurrencyServer(postgresRepo, logger)
+	grpcSrv := grpc.NewServer(grpc.MaxRecvMsgSize(4*1024*1024), grpc.MaxSendMsgSize(4*1024*1024),
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			Time:    10 * time.Second,
+			Timeout: 1 * time.Second,
+		}))
+
+	pb.RegisterCurrencyServiceServer(grpcSrv, srv)
+
+	lis, err := net.Listen("tcp", appConfig.AppPort)
 	if err != nil {
-		log.WithError(err).Fatal("failed to announce listener")
+		logger.WithError(err).Fatal("listener failed")
 	}
 
-	srv := grpc.NewServer()
-	srvc := servers.NewCurrencyServer(rp)
+	go func() {
+		logger.WithField("port", appConfig.AppPort).Info("server starting")
+		if err := grpcSrv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+			logger.WithError(err).Fatal("server failed")
+		}
+	}()
 
-	proto.RegisterCurrencyServiceServer(srv, srvc)
+	/* --- --- --- */
 
-	if err := srv.Serve(lis); err != nil {
-		log.WithError(err).Error("failed to start currency")
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	<-quit
+	logger.Info("server shutting down")
+
+	done := make(chan struct{})
+	go func() {
+		grpcSrv.GracefulStop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		logger.Info("server stopped")
+	case <-time.After(30 * time.Second):
+		logger.Warn("server forced to stop")
+		grpcSrv.Stop()
 	}
 }
 
-func startUpdates(rp *repos.Postgres, ec *clients.ExchangeClient, log *logrus.Logger) {
+/* --- --- --- */
+
+func startUpdates(repo *repos.PostgresRepo, exchange *clients.ExchangeClient, logger *logrus.Logger) {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
-	updateRates(rp, ec, log)
+	updateRates(repo, exchange, logger)
 	for range ticker.C {
-		updateRates(rp, ec, log)
+		updateRates(repo, exchange, logger)
 	}
 }
 
-func updateRates(rp *repos.Postgres, ec *clients.ExchangeClient, log *logrus.Logger) {
-	rates, err := ec.GetRates("USD")
+func updateRates(repo *repos.PostgresRepo, exchange *clients.ExchangeClient, logger *logrus.Logger) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rates, err := exchange.GetRates(ctx, "USD")
 	if err != nil {
-		log.WithError(err).Error("failed to get rates")
+		logger.WithError(err).Error("update rates failed")
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
-	if err := rp.UpdateRates(ctx, "USD", rates); err != nil {
-		log.WithError(err).Error("failed to update rates")
+	if err := repo.UpdateRates(ctx, "USD", rates); err != nil {
+		logger.WithError(err).Error("update rates in postgres failed")
 		return
 	}
 }

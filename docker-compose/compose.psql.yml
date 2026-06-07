@@ -1,0 +1,51 @@
+x-common: &common
+  mem_reservation: 256m
+  mem_limit: 512m
+  cpus: '0.5'
+  restart: unless-stopped
+
+x-hc-common: &hc-common
+  interval: 3s
+  timeout: 3s
+  retries: 3
+  start_period: 3s
+  start_interval: 3s
+
+services:
+  currency-postgres:
+    image: postgres:15
+    container_name: currency-postgres
+    <<: *common
+    volumes:
+      - currency-postgres:/var/lib/postgresql/data
+      - ../services/currency/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - psql-net
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "currency"]
+      <<: *hc-common
+    labels:
+      - "app.name=currency-postgres"
+    environment:
+      - POSTGRES_DB=currency
+      - POSTGRES_USER=currency
+      - POSTGRES_PASSWORD=pass1234
+
+  history-postgres:
+    image: postgres:15
+    container_name: history-postgres
+    <<: *common
+    volumes:
+      - history-postgres:/var/lib/postgresql/data
+      - ../services/history/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - psql-net
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "history"]
+      <<: *hc-common
+    labels:
+      - "app.name=history-postgres"
+    environment:
+      - POSTGRES_DB=history
+      - POSTGRES_USER=history
+      - POSTGRES_PASSWORD=pass1234

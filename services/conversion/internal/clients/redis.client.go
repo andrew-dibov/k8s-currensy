@@ -2,72 +2,74 @@ package clients
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	rd "github.com/go-redis/redis/v8"
 )
 
 type RedisClient struct {
+	client *rd.Client
 	ttl    time.Duration
-	client *redis.Client
 }
 
-func NewRedisClient(addr string, pass string, db int) (*RedisClient, error) {
-	rc := redis.NewClient(&redis.Options{
-		Addr:     addr,
-		Password: pass,
-		DB:       db,
+func NewRedisClient(redisDB int, redisURL string, redisPass string, ttl time.Duration) (*RedisClient, error) {
+	client := rd.NewClient(&rd.Options{
+		DB:       redisDB,
+		Addr:     redisURL,
+		Password: redisPass,
+
+		MaxRetries:      3,
+		MinRetryBackoff: 100 * time.Millisecond,
+		MaxRetryBackoff: 2 * time.Second,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	if err := rc.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("redis ping failed : %w", err)
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("redis failed to ping : %w", err)
 	}
 
 	return &RedisClient{
-		ttl:    5 * time.Minute,
-		client: rc,
+		client: client,
+		ttl:    ttl,
 	}, nil
 }
 
-func (rc *RedisClient) Close() error {
-	return rc.client.Close()
+func (redis *RedisClient) Close() error {
+	return redis.client.Close()
 }
 
 /* --- --- --- */
 
-func (rc *RedisClient) GetRate(ctx context.Context, fromCurrency string, toCurrency string) (float64, bool, error) {
-	key := fmt.Sprintf("rate:%s:%s", fromCurrency, toCurrency)
+func normalizeCurrency(currency string) string {
+	return strings.ToUpper(strings.TrimSpace(currency))
+}
 
-	val, err := rc.client.Get(ctx, key).Result()
+func (redis *RedisClient) GetRate(ctx context.Context, fromCurrency string, toCurrency string) (float64, bool, error) {
+	from := normalizeCurrency(fromCurrency)
+	to := normalizeCurrency(toCurrency)
 
-	if err == redis.Nil {
+	key := fmt.Sprintf("rate:%s:%s", from, to)
+	rate, err := redis.client.Get(ctx, key).Float64()
+
+	if err == rd.Nil {
 		return 0, false, nil
 	}
 
 	if err != nil {
-		return 0, false, err
-	}
-
-	var rate float64
-	if err := json.Unmarshal([]byte(val), &rate); err != nil {
-		return 0, false, err
+		return 0, false, fmt.Errorf("failed to get rate : %w", err)
 	}
 
 	return rate, true, nil
 }
 
-func (rc *RedisClient) SetRate(ctx context.Context, fromCurrency string, toCurrency string, rate float64) error {
-	key := fmt.Sprintf("rate:%s:%s", fromCurrency, toCurrency)
+func (redis *RedisClient) SetRate(ctx context.Context, fromCurrency string, toCurrency string, rate float64) error {
+	from := normalizeCurrency(fromCurrency)
+	to := normalizeCurrency(toCurrency)
 
-	val, err := json.Marshal(rate)
-	if err != nil {
-		return err
-	}
-
-	return rc.client.Set(ctx, key, val, rc.ttl).Err()
+	key := fmt.Sprintf("rate:%s:%s", from, to)
+	return redis.client.Set(ctx, key, rate, redis.ttl).Err()
 }

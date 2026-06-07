@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,25 +9,19 @@ import (
 )
 
 type ExchangeClient struct {
-	url    string
-	client *http.Client
+	baseURL string
+	client  *http.Client
 }
 
-type ExchangeRes struct {
-	Result             string             `json:"result"`
-	Documentation      string             `json:"documentation"`
-	TermsOfUse         string             `json:"terms_of_use"`
-	TimeLastUpdateUnix int64              `json:"time_last_update_unix"`
-	TimeLastUpdateUTC  string             `json:"time_last_update_utc"`
-	TimeNextUpdateUnix int64              `json:"time_next_update_unix"`
-	TimeNextUpdateUTC  string             `json:"time_next_update_utc"`
-	BaseCode           string             `json:"base_code"`
-	ConversionRates    map[string]float64 `json:"conversion_rates"`
+type ExchangeResponse struct {
+	Result          string             `json:"result"`
+	BaseCode        string             `json:"base_code"`
+	ConversionRates map[string]float64 `json:"conversion_rates"`
 }
 
 func NewExchangeClient(url string, token string) *ExchangeClient {
 	return &ExchangeClient{
-		url: fmt.Sprintf("%s%s/latest/", url, token),
+		baseURL: fmt.Sprintf("%s%s/latest/", url, token),
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -35,14 +30,15 @@ func NewExchangeClient(url string, token string) *ExchangeClient {
 
 /* --- --- --- */
 
-func (ec *ExchangeClient) GetRates(baseCurrency string) (map[string]float64, error) {
-	url := fmt.Sprintf("%s%s", ec.url, baseCurrency)
+func (exchange *ExchangeClient) GetRates(ctx context.Context, baseCurrency string) (map[string]float64, error) {
+	url := fmt.Sprintf("%s%s", exchange.baseURL, baseCurrency)
 
-	if baseCurrency == "" {
-		return nil, fmt.Errorf("empty base currency")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request %v", err)
 	}
 
-	res, err := ec.client.Get(url)
+	res, err := exchange.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get rates : %v", err)
 	}
@@ -52,9 +48,13 @@ func (ec *ExchangeClient) GetRates(baseCurrency string) (map[string]float64, err
 		return nil, fmt.Errorf("API responded with : %s", res.Status)
 	}
 
-	var data ExchangeRes
+	var data ExchangeResponse
 	if err := json.NewDecoder(res.Body).Decode(&data); err != nil {
 		return nil, fmt.Errorf("failed to decode response : %v", err)
+	}
+
+	if data.ConversionRates == nil {
+		return nil, fmt.Errorf("API response miss rates")
 	}
 
 	return data.ConversionRates, nil

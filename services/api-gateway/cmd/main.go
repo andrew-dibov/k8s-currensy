@@ -5,73 +5,100 @@ import (
 	"api-gateway/internal/configs"
 	"api-gateway/internal/handlers"
 	"api-gateway/internal/middlewares"
+	"context"
+	"errors"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	cfg := configs.Load()
+	appConfig := configs.LoadAppConfig()
 
-	log := logrus.New()
-	log.SetFormatter(&logrus.JSONFormatter{})
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.JSONFormatter{})
+
+	logger.WithFields(logrus.Fields{
+		"app_port": appConfig.AppPort,
+		"app_keys": appConfig.AppKeys,
+
+		"history_url":    appConfig.HistoryURL,
+		"currency_url":   appConfig.CurrencyURL,
+		"conversion_url": appConfig.ConversionURL,
+	}).Info("api-gateway : app config loaded")
 
 	/* --- --- --- */
 
-	currencyClient, err := clients.NewCurrencyClient(cfg.CurrencyService)
+	currencyClient, err := clients.NewCurrencyClient(appConfig.CurrencyURL, 5*time.Second)
 	if err != nil {
-		// log.WithError(err).Fatal("failed to init currency client")
-		log.WithError(err).Error("failed to init currency client")
+		logger.WithError(err).Fatal("currency client failed")
 	}
 	defer currencyClient.Close()
 
-	conversionClient, err := clients.NewConversionClient(cfg.ConversionService)
+	currency := handlers.NewCurrencyHandler(currencyClient, logger)
+
+	conversionClient, err := clients.NewConversionClient(appConfig.ConversionURL, 5*time.Second)
 	if err != nil {
-		log.WithError(err).Fatal("failed to init conversion client")
+		logger.WithError(err).Fatal("currency client failed")
 	}
 	defer conversionClient.Close()
 
-	/* --- --- --- */
-
-	currency := handlers.NewCurrencyHandler(currencyClient, log)
-	conversion := handlers.NewConversionHandler(conversionClient, log)
+	conversion := handlers.NewConversionHandler(conversionClient, logger)
 
 	/* --- --- --- */
 
 	router := mux.NewRouter()
 
 	router.Use(func(next http.Handler) http.Handler {
-		return middlewares.LoggerMiddleware(next, log)
+		return middlewares.LoggerMiddleware(next, logger)
 	})
 
 	router.Use(func(next http.Handler) http.Handler {
-		return middlewares.AuthenticatorMiddleware(next, log, cfg.APIKeys)
+		return middlewares.AuthMiddleware(next, logger, appConfig.AppKeys)
 	})
 
-	/* --- --- --- */
-
-	router.HandleFunc("/", rootHandler)
-	router.HandleFunc("/health", healthHandler)
+	router.HandleFunc("/health", handlers.HealthHandler).Methods("GET")
 
 	router.HandleFunc("/api/v1/rate", currency.GetRate).Methods("GET")
-	router.HandleFunc("/api/v1/allRates", currency.GetAllRates).Methods("GET")
+	router.HandleFunc("/api/v1/rates", currency.GetAllRates).Methods("GET")
 	router.HandleFunc("/api/v1/convert", conversion.Convert).Methods("POST")
 
 	/* --- --- --- */
 
-	http.ListenAndServe(":8080", router)
-	if err := http.ListenAndServe(cfg.Port, router); err != nil {
-		log.WithError(err).Fatal("server failed")
+	server := &http.Server{
+		Addr:         appConfig.AppPort,
+		Handler:      router,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
-}
 
-/* --- --- --- */
+	go func() {
+		logger.WithField("port", appConfig.AppPort).Info("server starting")
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.WithError(err).Fatal("server failed")
+		}
+	}()
 
-func rootHandler(res http.ResponseWriter, req *http.Request) {
-	res.Write([]byte("API-Gateway v1.0.0"))
-}
+	/* --- --- --- */
 
-func healthHandler(res http.ResponseWriter, req *http.Request) {
-	res.Write([]byte("OK"))
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	<-quit
+	logger.Info("server shutting down")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		logger.WithError(err).Fatal("server forced to stop")
+	}
+
+	logger.Info("server stopped")
 }

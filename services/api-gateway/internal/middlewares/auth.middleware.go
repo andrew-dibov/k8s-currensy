@@ -6,7 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func AuthenticatorMiddleware(next http.Handler, logger *logrus.Logger, validKeys map[string]bool) http.Handler {
+func AuthMiddleware(next http.Handler, logger *logrus.Logger, validKeys map[string]bool) http.Handler {
 	return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		if req.URL.Path == "/health" {
 			next.ServeHTTP(res, req)

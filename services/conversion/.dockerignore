@@ -1,8 +1,7 @@
-.git
-.gitignore
+.*
+!.dockerignore
+
+*.md
+*.log
 
 Dockerfile
-.dockerignore
-
-*.log
-*.md

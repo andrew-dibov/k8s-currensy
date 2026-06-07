@@ -1,0 +1,65 @@
+x-common: &common
+  mem_reservation: 512m
+  mem_limit: 1024m
+  cpus: '0.5'
+  restart: unless-stopped
+
+x-hc-common: &hc-common
+  interval: 3s
+  timeout: 3s
+  retries: 3
+  start_period: 30s
+  start_interval: 3s
+
+services:    
+  conversion-redis:
+    image: redis:7-alpine
+    container_name: conversion-redis
+    <<: *common
+    networks:
+      - infra-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      <<: *hc-common
+    labels:
+      - "app.name=conversion-redis"
+    command: redis-server --requirepass pass1234
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    <<: *common
+    networks:
+      - infra-net
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      <<: *hc-common
+    labels:
+      - "app.name=zookeeper"
+    environment:
+      - ZOOKEEPER_TICK_TIME=2000
+      - ZOOKEEPER_CLIENT_PORT=2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    <<: *common
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    networks:
+      - infra-net
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9092"]
+      <<: *hc-common
+    labels:
+      - "app.name=kafka"
+    environment:
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_BROKER_ID=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT_INTERNAL
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092

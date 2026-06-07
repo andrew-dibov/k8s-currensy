@@ -7,5 +7,4 @@ CREATE TABLE rates (
     UNIQUE(base_currency, currency_code)
 );
 
-CREATE INDEX idx_rates_base_currency ON rates(base_currency);
-CREATE INDEX idx_rates_updated_at ON rates(updated_at);
+CREATE INDEX idx_rates_base_currency_updated_at ON rates(base_currency, updated_at);

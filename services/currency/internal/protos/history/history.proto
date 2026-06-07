@@ -7,7 +7,6 @@ option go_package = "./;history";
 
 
 service HistoryService {
-  rpc LogConversion(LogConversionRequest) returns (LogConversionResponse);
   rpc GetHistory(GetHistoryRequest) returns (GetHistoryResponse);
 }
 
@@ -20,16 +19,6 @@ message ConversionRecord {
   double result = 5;
   double rate = 6;
   google.protobuf.Timestamp created_at = 7;
-}
-
-
-message LogConversionRequest {
-  ConversionRecord record = 1;
-}
-
-message LogConversionResponse {
-  bool success = 1;
-  string message = 2;
 }
 
 

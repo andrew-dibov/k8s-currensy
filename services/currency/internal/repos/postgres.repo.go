@@ -6,17 +6,17 @@ import (
 	"fmt"
 )
 
-type Postgres struct {
+type PostgresRepo struct {
 	db *sql.DB
 }
 
-func NewPostgres(db *sql.DB) *Postgres {
-	return &Postgres{
+func NewPostgresRepo(db *sql.DB) *PostgresRepo {
+	return &PostgresRepo{
 		db: db,
 	}
 }
 
-func (p *Postgres) GetRate(ctx context.Context, fromCurrency string, toCurrency string) (float64, error) {
+func (postgres *PostgresRepo) GetRate(ctx context.Context, fromCurrency string, toCurrency string) (float64, error) {
 	if fromCurrency == toCurrency {
 		return 1.00, nil
 	}
@@ -31,7 +31,7 @@ func (p *Postgres) GetRate(ctx context.Context, fromCurrency string, toCurrency 
 	var rate float64
 
 	if fromCurrency == "USD" {
-		err := p.db.QueryRowContext(ctx, query, toCurrency).Scan(&rate)
+		err := postgres.db.QueryRowContext(ctx, query, toCurrency).Scan(&rate)
 		if err != nil {
 			return 0, err
 		}
@@ -40,7 +40,7 @@ func (p *Postgres) GetRate(ctx context.Context, fromCurrency string, toCurrency 
 	}
 
 	if toCurrency == "USD" {
-		err := p.db.QueryRowContext(ctx, query, fromCurrency).Scan(&rate)
+		err := postgres.db.QueryRowContext(ctx, query, fromCurrency).Scan(&rate)
 		if err != nil {
 			return 0, err
 		}
@@ -52,12 +52,12 @@ func (p *Postgres) GetRate(ctx context.Context, fromCurrency string, toCurrency 
 
 	var fromRate, toRate float64
 
-	err := p.db.QueryRowContext(ctx, query, fromCurrency).Scan(&fromRate)
+	err := postgres.db.QueryRowContext(ctx, query, fromCurrency).Scan(&fromRate)
 	if err != nil {
 		return 0, err
 	}
 
-	err = p.db.QueryRowContext(ctx, query, toCurrency).Scan(&toRate)
+	err = postgres.db.QueryRowContext(ctx, query, toCurrency).Scan(&toRate)
 	if err != nil {
 		return 0, err
 	}
@@ -65,13 +65,13 @@ func (p *Postgres) GetRate(ctx context.Context, fromCurrency string, toCurrency 
 	return toRate / fromRate, nil
 }
 
-func (p *Postgres) GetAllRates(ctx context.Context, baseCurrency string) (map[string]float64, error) {
+func (postgres *PostgresRepo) GetAllRates(ctx context.Context, baseCurrency string) (map[string]float64, error) {
 	query := `
 	SELECT currency_code, rate FROM rates WHERE base_currency = $1
   AND updated_at > NOW() - INTERVAL '1 day'
 	`
 
-	rows, err := p.db.QueryContext(ctx, query, baseCurrency)
+	rows, err := postgres.db.QueryContext(ctx, query, baseCurrency)
 	if err != nil {
 		return nil, err
 	}
@@ -95,14 +95,14 @@ func (p *Postgres) GetAllRates(ctx context.Context, baseCurrency string) (map[st
 	return rates, nil
 }
 
-func (p *Postgres) UpdateRates(ctx context.Context, baseCurrency string, rates map[string]float64) error {
+func (postgres *PostgresRepo) UpdateRates(ctx context.Context, baseCurrency string, rates map[string]float64) error {
 	if len(rates) == 0 {
 		return fmt.Errorf("rates map is empty")
 	}
 
 	/* --- --- --- */
 
-	tx, err := p.db.BeginTx(ctx, nil)
+	tx, err := postgres.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}

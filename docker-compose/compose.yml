@@ -1,0 +1,23 @@
+networks:
+  app-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 175.25.0.0/16
+  psql-net:
+    driver: bridge
+    internal: true
+  infra-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  currency-postgres:
+    driver: local
+  history-postgres:
+    driver: local
+
+include:
+  - compose.app.yml
+  - compose.psql.yml
+  - compose.infra.yml
