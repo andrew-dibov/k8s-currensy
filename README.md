@@ -18,6 +18,14 @@
 
 В ПРОЦЕССЕ
 
-## Kubernetes
+```bash
+docker swarm init
+(cd docker-swarm && ???)
+```
+
+## Kubernetes : microk8s
+
+```bash
+```
 
 В ПРОЦЕССЕ
