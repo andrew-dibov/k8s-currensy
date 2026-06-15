@@ -1,0 +1,212 @@
+networks:
+  app-net:
+    driver: overlay
+    attachable: true
+  psql-net:
+    driver: overlay
+    internal: true
+    attachable: true
+  infra-net:
+    driver: overlay
+    internal: true
+    attachable: true
+
+volumes:
+  currency-postgres:
+  history-postgres:
+
+x-common: &common
+  deploy:
+    replicas: 1
+    restart_policy:
+      condition: any
+    resources:
+      limits:
+        memory: "512M"
+        cpus: "0.5"
+      reservations:
+        memory: "256M"
+        cpus: "0.2"
+  healthcheck:
+    test: ["CMD", "nc", "-z", "localhost", "8080"]
+    interval: 3s
+    timeout: 3s
+    retries: 3
+    start_period: 3s
+
+x-hc-common: &hc-common
+  interval: 3s
+  timeout: 3s
+  retries: 3
+  start_period: 3s
+
+configs:
+  init.currency-postgres:
+    file: ../services/currency/migrations/init.sql
+  init.history-postgres:
+    file: ../services/history/migrations/init.sql
+
+services:
+  api-gateway:
+    image: andrewdibov/currency-api-gateway:latest
+    <<: *common
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    networks:
+      - app-net
+    labels:
+      - "app.name=api-gateway"
+    environment:
+      - APP_PORT=8080
+      - APP_KEYS=test-1111,test-2222,test-3333,test-4444
+      - HISTORY_ADDR=history
+      - HISTORY_PORT=8080
+      - CURRENCY_ADDR=currency
+      - CURRENCY_PORT=8080
+      - CONVERSION_ADDR=conversion
+      - CONVERSION_PORT=8080
+
+  conversion:
+    image: andrewdibov/currency-conversion:latest
+    <<: *common
+    networks:
+      - app-net
+      - infra-net
+    labels:
+      - "app.name=conversion"
+    environment:
+      - APP_PORT=8080
+      - CURRENCY_ADDR=currency
+      - CURRENCY_PORT=8080
+      - REDIS_ADDR=conversion-redis
+      - REDIS_PORT=6379
+      - REDIS_PASS=pass1234
+      - KAFKA_TOPIC=conversion
+      - KAFKA_BROKERS=kafka:29092
+
+  currency:
+    image: andrewdibov/currency-currency:latest
+    <<: *common
+    networks:
+      - app-net
+      - psql-net
+    labels:
+      - "app.name=currency"
+    environment:
+      - APP_PORT=8080
+      - EXTERNAL_URL=https://v6.exchangerate-api.com/v6/
+      - POSTGRES_USER=currency
+      - POSTGRES_PASS=pass1234
+      - POSTGRES_HOST=currency-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=currency
+    env_file:
+      - .env
+
+  history:
+    image: andrewdibov/currency-history:latest
+    <<: *common
+    networks:
+      - app-net
+      - psql-net
+      - infra-net
+    labels:
+      - "app.name=history"
+    environment:
+      - APP_PORT=8080
+      - POSTGRES_USER=history
+      - POSTGRES_PASS=pass1234
+      - POSTGRES_HOST=history-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=history
+      - KAFKA_BROKERS=kafka:29092
+      - KAFKA_GROUP=history-group
+      - KAFKA_TOPIC=conversion
+    env_file:
+      - .env
+
+  currency-postgres:
+    image: postgres:15
+    <<: *common
+    volumes:
+      - currency-postgres:/var/lib/postgresql/data
+    configs:
+      - source: init.currency-postgres
+        target: /docker-entrypoint-initdb.d/init.sql
+    networks:
+      - psql-net
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "currency"]
+      <<: *hc-common
+    labels:
+      - "app.name=currency-postgres"
+    environment:
+      - POSTGRES_DB=currency
+      - POSTGRES_USER=currency
+      - POSTGRES_PASSWORD=pass1234
+
+  history-postgres:
+    image: postgres:15
+    <<: *common
+    volumes:
+      - history-postgres:/var/lib/postgresql/data
+    configs:
+      - source: init.history-postgres
+        target: /docker-entrypoint-initdb.d/init.sql
+    networks:
+      - psql-net
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "history"]
+      <<: *hc-common
+    labels:
+      - "app.name=history-postgres"
+    environment:
+      - POSTGRES_DB=history
+      - POSTGRES_USER=history
+      - POSTGRES_PASSWORD=pass1234
+
+  conversion-redis:
+    image: redis:7-alpine
+    <<: *common
+    networks:
+      - infra-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      <<: *hc-common
+    labels:
+      - "app.name=conversion-redis"
+    command: redis-server --requirepass pass1234
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    <<: *common
+    networks:
+      - infra-net
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      <<: *hc-common
+    labels:
+      - "app.name=zookeeper"
+    environment:
+      - ZOOKEEPER_TICK_TIME=2000
+      - ZOOKEEPER_CLIENT_PORT=2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    <<: *common
+    networks:
+      - infra-net
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9092"]
+      <<: *hc-common
+    labels:
+      - "app.name=kafka"
+    environment:
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_BROKER_ID=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT_INTERNAL
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092

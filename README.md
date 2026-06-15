@@ -26,6 +26,7 @@ docker swarm init
 ## Kubernetes : microk8s
 
 ```bash
+microk8s config > ~/.kube/config
 ```
 
 В ПРОЦЕССЕ
