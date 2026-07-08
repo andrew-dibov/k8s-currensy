@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"history/internal/repos"
+	"io"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 	"github.com/sirupsen/logrus"
@@ -51,7 +53,13 @@ func (consumer *KafkaConsumer) Run(ctx context.Context) {
 				return
 			}
 
+			if errors.Is(err, io.EOF) {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
 			consumer.logger.WithError(err).Error("failed to read message")
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
